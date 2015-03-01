@@ -30,13 +30,14 @@
 ;; displays a list of currently set registers.
 
 ;; This list is similar to that of `browse-kill-ring': you can delete
-;; registers with `d'.  If you want
+;; registers with `d'.
 
 ;; Hitting RET on a value string will jump to the register's location or
 ;; add the text to buffer.  Hitting RET on a register's type will
 ;; restrict the list to registers of this type.
 ;;
 ;; Put this file into your load-path and the following into your ~/.emacs:
+;;
 ;;   (require 'browse-register)
 ;;
 ;; Many code is from register-list.el, browse-kill-ring.el and bs.el.
@@ -58,51 +59,19 @@
   (require 'overlay))
 
 (defgroup browse-register nil
-  "Interactively list/edit registers."
-  :tag "Register List"
+  "Interactively browse/edit registers."
+  :tag "BrowseRegister"
   :group 'convenience)
 
 (define-derived-mode browse-register-mode special-mode "BrowseRegister"
-  "Major mode for editing a list of register keys.
-
-Each line is of the form:
-
-\[Delete-flag] Key Type Value
-
-The leftmost column displays a `D' character if the register key
-is flagged for further deletion.  You can add such flag by hitting
-\\[register-list-delete].
-
-The Key column displays the character used for this register.
-Hitting \\[register-list-call-handler-at-point] on the key will
-prompt for a replacement.
-
-The Type column displays the type of the register, either [F]rame
-\[N]umber [M]arkers [R]ectangle [S]string or [W]window.  Hitting
-\\[register-list-call-handler-at-point] on this column will
-restrict the register list to this type of registers.  To quickly
-list a specific type, hit the type character among [FNMRSW].
-
-The Value column displays information about the value of the
-register: either a string if the register's value is a string, a
-number or a rectangle, or the location of the marker or some
-information about window and frame configuration.  Hitting
-\\[register-list-call-handler-at-point] on this column will
-copy the string to the kill ring or jump to the location.
-
-\\[register-list-quit] -- quit the browse-register."
+  "Major mode for browsing a list of registers."
   (setq truncate-lines t)
-  (setq buffer-read-only t)
-
   (define-key browse-register-mode-map "q" 'browse-register-quit)
   (define-key browse-register-mode-map (kbd "RET") 'browse-register-call-handler-at-point)
   (define-key browse-register-mode-map "+" 'browse-register-increment-key)
   (define-key browse-register-mode-map "-" 'browse-register-decrement-key)
   (define-key browse-register-mode-map "g" 'browse-register-refresh)
   (define-key browse-register-mode-map "d" 'browse-register-delete-register))
-
-(defvar browse-register-current-fontification nil
-  "Whether the value strings are currently fontified.")
 
 (defvar browse-register-original-window-config nil
   "The window configuration to restore for `browse-register-quit'.")
@@ -199,28 +168,17 @@ window configuration, [SM] will list strings and markers, etc."
     (cond ((window-configuration-p (car key)) "W")
           ((frame-configuration-p (car key)) "F")
           ((stringp (car key)) "R")
-          ;;((string= "file-query" (car key)) "B")
           ((string= "Unprintable entity" (car key)) "?")
           (t (format "error[2] : %s" (car key))))))
 
 (defun browse-register-get-handler (register type)
   "Return a handler function for a REGISTER with TYPE."
-  ;; (message (format "aaa %s"
-  ;;                  (char-to-string (car register))))
   (cond ((string= "?" type)
      `(lambda() (message "No action with this type")))
-    ((string= "S" type)
+    ((string-match "[SNR]" type)
      `(lambda()
         (browse-register-quit)
         (insert-register ,(car register))))
-    ((string= "N" type)
-     `(lambda()
-        (browse-register-quit)
-        (insert-register ,(car register))))
-    ((string= "R" type)
-     `(lambda()
-        (kill-new ,(mapconcat 'identity (cdr register) "\n"))
-        (message "Rectangle copied to the kill ring")))
     ((string-match "[FMW]" type)
      `(lambda()
         (browse-register-quit)
@@ -293,7 +251,6 @@ on a register type, rebuild the list restricting to registers of
 this type.  If the point is on a register value, either jump to
 the register or copy its value into the kill ring."
   (interactive)
-  ;;(message "kkk 111")
   (let ((register (browse-register-get-current-register)))
     (if register
       (condition-case nil
@@ -301,7 +258,6 @@ the register or copy its value into the kill ring."
                (val (browse-register-elide (cdr register)))
                (typ (browse-register-get-type val))
                (hdl (browse-register-get-handler register typ)))
-          ;;(message "111")
           (funcall hdl))
 	      (error (message "Unknown error."))))))
 
@@ -315,7 +271,6 @@ Raise an error if not on a register line."
       (error "You are on a header row"))
     (when (>= line (length register-alist))
       (error "Register not exits."))
-    (message "aaa %d %d" line (length register-alist))
     (nth line register-alist)))
 
 (defun browse-register-increment-key nil
@@ -331,14 +286,13 @@ Raise an error if not on a register line."
 (defun browse-register-set-key (function)
   "Update the regsiter key by applying FUNCTION."
   (let* ((register (browse-register-get-current-register))
-         (reg register)
          (key (char-to-string (car register)))
          (val (browse-register-elide (cdr register)))
          (typ (browse-register-get-type val))
          (hdl (browse-register-get-handler register typ)))
     (if (string= "N" typ)
       (progn
-        (setq register-alist (delete reg register-alist))
+        (setq register-alist (delete register register-alist))
         (add-to-list 'register-alist (cons (car register) (funcall function val)))
         (browse-register-sort-register)
         (browse-register-refresh))
@@ -373,13 +327,8 @@ Raise an error if not on a register line."
       (propertize "- ---  ----  -------------------------------------------\n"
       'intangible t
       'face 'font-lock-comment-delimiter-face)))
-
     (setq type (or type browse-register-default-types))
-    (setq browse-register-current-fontification
-          (or fontify browse-register-current-fontification))
-
     (browse-register-sort-register)
-
     (mapc
      (lambda (register)
        (let* ((key (char-to-string (car register)))
@@ -397,21 +346,8 @@ Raise an error if not on a register line."
                     (propertize (browse-register-prepare-string
                                  (browse-register-value-to-string val typ) fontify)))))))
      register-alist)
-
     (set-buffer-modified-p nil)
     (setq buffer-read-only t)))
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 ;;;###autoload
@@ -427,9 +363,7 @@ Raise an error if not on a register line."
       (browse-register-resize-window)
       (browse-register-refresh type fontify)
       (goto-char (point-min))
-      (browse-register-mode)
-
-      )))
+      (browse-register-mode))))
 
 (provide 'browse-register)
 
