@@ -77,6 +77,8 @@
   "The window configuration to restore for `browse-register-quit'.")
   (make-variable-buffer-local 'browse-register-original-window-config)
 
+(defvar browse-register-last-used-key nil)
+
 (defconst browse-register-header-lines-length 2
   "Number of lines for headers in Browse Register Buffer.")
 
@@ -178,6 +180,7 @@ window configuration, [SM] will list strings and markers, etc."
     ((string-match "[SNR]" type)
      `(lambda()
         (browse-register-quit)
+        (kill-new ,(cdr register))
         (insert-register ,(car register))))
     ((string-match "[FMW]" type)
      `(lambda()
@@ -209,28 +212,30 @@ output string to `browse-register-string-width'."
 
 (defun browse-register-value-to-string (value type)
   "Convert a register VALUE into a string according to its TYPE."
-  (cond ((string= "M" type)
-	 (cond ((marker-position value)
-		(format "[Marker at point %d in buffer %s]"
-			(marker-position value)
-			(buffer-name (marker-buffer value))))
-	       ((marker-buffer value)
-		(format "[Marker in buffer %s]"
-			(buffer-name (marker-buffer value))))
-	       (t (format "[Marker gone?]"))))
-	((string= "N" type)
-	 (format "Number: %s" (number-to-string value)))
-	((string= "S" type)
-	 (replace-regexp-in-string "[\n\r\t]" " " value))
-	((string= "R" type)
-	 (mapconcat 'identity value "\\ "))
-	((string= "W" type)
-	 (format "[Window configuration in frame \"%s\"]"
-		  (frame-parameter
-		   (window-configuration-frame (car value)) 'name)))
-	((string= "F" type)
-	 (format "[Frame configuration]"))
-	(t "[Error: unknow type]")))
+  (cond
+    ((string= "M" type)
+      (cond
+        ((marker-position value)
+          (format "[Marker at point %d in buffer %s]"
+                    (marker-position value)
+                    (buffer-name (marker-buffer value))))
+        ((marker-buffer value)
+          (format "[Marker in buffer %s]"
+                    (buffer-name (marker-buffer value))))
+        (t (format "[Marker gone?]"))))
+    ((string= "N" type)
+      (format "Number: %s" (number-to-string value)))
+    ((string= "S" type)
+      (replace-regexp-in-string "[\n\r\t]" " " value))
+    ((string= "R" type)
+      (mapconcat 'identity value "\\ "))
+    ((string= "W" type)
+      (format "[Window configuration in frame \"%s\"]"
+             (frame-parameter
+              (window-configuration-frame (car value)) 'name)))
+    ((string= "F" type)
+      (format "[Frame configuration]"))
+    (t "[Error: unknow type]")))
 
 (defun browse-register-quit ()
   "Take the action specified by `browse-register-quit-action'."
@@ -254,10 +259,11 @@ the register or copy its value into the kill ring."
   (let ((register (browse-register-get-current-register)))
     (if register
       (condition-case nil
-        (let* (;;(key (char-to-string (car register)))
+        (let* ((key (char-to-string (car register)))
                (val (browse-register-elide (cdr register)))
                (typ (browse-register-get-type val))
                (hdl (browse-register-get-handler register typ)))
+          (setq browse-register-last-used-key key)
           (funcall hdl))
 	      (error (message "Unknown error."))))))
 
@@ -335,7 +341,6 @@ Raise an error if not on a register line."
               (val (browse-register-elide (cdr register)))
               (typ (browse-register-get-type val))
               (hdl (browse-register-get-handler register typ)))
-         ;;(message (format "bbb %s %s" typ type))
          (when (string-match typ type)
            (insert
             (format "  %s    %s   %s\n"
@@ -348,6 +353,21 @@ Raise an error if not on a register line."
      register-alist)
     (set-buffer-modified-p nil)
     (setq buffer-read-only t)))
+
+(defun browse-register-move-cursor-to-last-used-register ()
+  ""
+  (let* ((stop-search nil)
+         (register nil)
+         (key nil)
+         (i 0))
+    (while (not stop-search)
+      (setq register (nth i register-alist))
+      (setq key (char-to-string (car register)))
+      (if (string-match browse-register-last-used-key key)
+        (progn
+          (setq stop-search t)
+          (forward-line (+ browse-register-header-lines-length i))))
+      (setq i (1+ i)))))
 
 
 ;;;###autoload
@@ -363,7 +383,12 @@ Raise an error if not on a register line."
       (browse-register-resize-window)
       (browse-register-refresh type fontify)
       (goto-char (point-min))
-      (browse-register-mode))))
+      (if browse-register-last-used-key
+        (browse-register-move-cursor-to-last-used-register))
+      (browse-register-mode)
+      (message (substitute-command-keys
+                (concat "    Type \\[browse-register-quit] to quit.  "
+                        "\\[describe-mode] for help."))))))
 
 (provide 'browse-register)
 
