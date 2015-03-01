@@ -177,10 +177,20 @@ window configuration, [SM] will list strings and markers, etc."
   "Return a handler function for a REGISTER with TYPE."
   (cond ((string= "?" type)
      `(lambda() (message "No action with this type")))
-    ((string-match "[SNR]" type)
+    ((string= "S" type)
      `(lambda()
         (browse-register-quit)
         (kill-new ,(cdr register))
+        (insert-register ,(car register))))
+    ((string= "N" type)
+     `(lambda()
+        (browse-register-quit)
+        (kill-new ,(number-to-string (cdr register)))
+        (insert-register ,(car register))))
+    ((string= "R" type)
+     `(lambda()
+        (browse-register-quit)
+        (kill-new ,(mapconcat 'identity (cdr register) "\n"))
         (insert-register ,(car register))))
     ((string-match "[FMW]" type)
      `(lambda()
@@ -263,9 +273,10 @@ the register or copy its value into the kill ring."
                (val (browse-register-elide (cdr register)))
                (typ (browse-register-get-type val))
                (hdl (browse-register-get-handler register typ)))
+          ;;(message "111 %s" typ)
           (setq browse-register-last-used-key key)
           (funcall hdl))
-	      (error (message "Unknown error."))))))
+	      (error (message "Unknown error[0]"))))))
 
 (defun browse-register-get-current-register ()
   "Return register on current line.
@@ -383,7 +394,7 @@ Raise an error if not on a register line."
       (browse-register-resize-window)
       (browse-register-refresh type fontify)
       (goto-char (point-min))
-      (if browse-register-last-used-key
+      (if (and browse-register-last-used-key register-alist)
         (browse-register-move-cursor-to-last-used-register))
       (browse-register-mode)
       (message (substitute-command-keys
