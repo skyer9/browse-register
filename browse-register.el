@@ -5,7 +5,7 @@
 ;; Author: Lee San <skyer9@gmail.com>
 ;; Maintainer: Lee San <skyer9@gmail.com>
 ;; Created: 2015-03-01
-;; Version: 0.1
+;; Version: 0.2
 ;; Keywords: convenience
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -46,6 +46,10 @@
 ;;; Todo:
 ;;
 ;;; History:
+;;
+;; - [2015-03-03] Released v0.2
+;;
+;;   Add shortcut i (insert-register) and j (jump-to-register).
 ;;
 ;; - [2015-03-01] Released v0.1
 ;;
