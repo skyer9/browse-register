@@ -71,7 +71,13 @@
   (define-key browse-register-mode-map "+" 'browse-register-increment-key)
   (define-key browse-register-mode-map "-" 'browse-register-decrement-key)
   (define-key browse-register-mode-map "g" 'browse-register-refresh)
-  (define-key browse-register-mode-map "d" 'browse-register-delete-register))
+  (define-key browse-register-mode-map "d" 'browse-register-delete-register)
+  (define-key browse-register-mode-map "i" 'browse-register-insert-register)
+  (define-key browse-register-mode-map "j" 'browse-register-jump-to-register)
+  ;;(define-key browse-register-mode-map "s" 'browse-register-copy-to-register)
+
+
+  )
 
 (defvar browse-register-original-window-config nil
   "The window configuration to restore for `browse-register-quit'.")
@@ -379,6 +385,29 @@ Raise an error if not on a register line."
           (setq stop-search t)
           (forward-line (+ browse-register-header-lines-length i))))
       (setq i (1+ i)))))
+
+;; (defun browse-register-copy-to-register ()
+;;   "wrapper for insert-register"
+;;   ;;(interactive "cCopy to register: ")
+;;   (browse-register-quit)
+;;   (copy-to-register))
+
+(defun browse-register-insert-register (key)
+  "wrapper for insert-register"
+  (interactive "cInsert register: ")
+  (browse-register-quit)
+  (insert-register key))
+
+(defun browse-register-jump-to-register (key)
+  "wrapper for jump-to-register"
+  (interactive "cJump to register: ")
+  (browse-register-quit)
+  (jump-to-register key))
+
+
+
+
+
 
 
 ;;;###autoload
