@@ -49,7 +49,13 @@
 ;;
 ;; - [2015-03-03] Released v0.2
 ;;
-;;   Add shortcut i (insert-register) and j (jump-to-register).
+;;   Works with `delete-selection-mode'.
+;;
+;;   Add shortcut i `insert-register' and j `jump-to-register'.
+;;
+;;   Add variable named `browse-register-max-window-height'.
+;;   Add variable named `browse-register-move-cursor-after-inserted-text'.
+;;
 ;;
 ;; - [2015-03-01] Released v0.1
 ;;
@@ -88,6 +94,14 @@
   (make-variable-buffer-local 'browse-register-original-window-config)
 
 (defvar browse-register-last-used-key nil)
+
+(defvar browse-register-move-cursor-after-inserted-text nil
+  "If non-nil, puts mark before inserted text and point after.")
+
+(defcustom browse-register-max-window-height 20
+  "Maximal window height of Browse Register Buffer."
+  :type 'integer
+  :group 'browse-register)
 
 (defconst browse-register-header-lines-length 2
   "Number of lines for headers in Browse Register Buffer.")
@@ -390,6 +404,11 @@ Raise an error if not on a register line."
           (forward-line (+ browse-register-header-lines-length i))))
       (setq i (1+ i)))))
 
+(defun browse-register-set-window-height ()
+  "Change the height of the selected window to suit the current register list."
+  (unless (one-window-p t)
+    (fit-window-to-buffer (selected-window) browse-register-max-window-height)))
+
 ;; (defun browse-register-copy-to-register ()
 ;;   "wrapper for insert-register"
 ;;   ;;(interactive "cCopy to register: ")
@@ -400,7 +419,9 @@ Raise an error if not on a register line."
   "wrapper for insert-register"
   (interactive "cInsert register: ")
   (browse-register-quit)
-  (insert-register key))
+  (when (and delete-selection-mode (not buffer-read-only) transient-mark-mode mark-active)
+    (delete-active-region))
+  (insert-register key browse-register-move-cursor-after-inserted-text))
 
 (defun browse-register-jump-to-register (key)
   "wrapper for jump-to-register"
@@ -426,6 +447,7 @@ Raise an error if not on a register line."
       (pop-to-buffer buf)
       (browse-register-resize-window)
       (browse-register-refresh type fontify)
+      (browse-register-set-window-height)
       (goto-char (point-min))
       (if (and browse-register-last-used-key register-alist)
         (browse-register-move-cursor-to-last-used-register))
