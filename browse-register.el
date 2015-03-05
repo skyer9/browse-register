@@ -5,7 +5,7 @@
 ;; Author: Lee San <skyer9@gmail.com>
 ;; Maintainer: Lee San <skyer9@gmail.com>
 ;; Created: 2015-03-01
-;; Version: 0.2
+;; Version: 0.3.1
 ;; Keywords: convenience
 
 ;; This program is free software; you can redistribute it and/or modify
@@ -46,6 +46,16 @@
 ;;; Todo:
 ;;
 ;;; History:
+;;
+;; - [2015-03-05] Released v0.3.1
+;;
+;;   Add support for `frameset' configuration.
+;;
+;;
+;; - [2015-03-04] Released v0.3
+;;
+;;   Add support for `file', `file-query'.
+;;
 ;;
 ;; - [2015-03-03] Released v0.2
 ;;
@@ -137,7 +147,7 @@ the window size chosen by `pop-to-buffer'; MINIMUM defaults to
                  (cons (integer :tag "Maximum") (integer :tag "Minimum")))
   :group 'browse-register)
 
-(defcustom browse-register-default-types "[FNMRSW]"
+(defcustom browse-register-default-types "[FNMRSWOVAE]"
   "A regexp matching the default register types to list.
 
 The available types are: [F]rame [N]umber [M]arkers [R]ectangle
@@ -184,18 +194,19 @@ window configuration, [SM] will list strings and markers, etc."
                          window-min-height))
              (list nil window-min-height)))))
 
-(defun browse-register-get-type (key)
-  "Get the type for register's KEY."
-  (if (atom key)
-    (cond ((stringp key) "S")
-          ((numberp key) "N")
-          ((markerp key) "M")
-          (t "error[1]"))
-    (cond ((window-configuration-p (car key)) "W")
-          ((frame-configuration-p (car key)) "F")
-          ((stringp (car key)) "R")
-          ((string= "Unprintable entity" (car key)) "?")
-          (t (format "error[2] : %s" (car key))))))
+(defun browse-register-get-type (val)
+  "Get the type for register's VAL"
+  (cond
+   ((registerv-p val) "A")
+   ((and (consp val) (window-configuration-p (car val))) "W")
+   ((and (consp val) (frame-configuration-p (car val))) "F")
+   ((and (consp val) (eq (car val) 'file)) "O")
+   ((and (consp val) (eq (car val) 'file-query)) "V")
+   ((consp val) "R")
+   ((stringp val) "S")
+   ((numberp val) "N")
+   ((and (markerp val) (marker-position val)) "M")
+   (t "E")))
 
 (defun browse-register-get-handler (register type)
   "Return a handler function for a REGISTER with TYPE."
@@ -204,19 +215,22 @@ window configuration, [SM] will list strings and markers, etc."
     ((string= "S" type)
      `(lambda()
         (browse-register-quit)
-        (kill-new ,(cdr register))
-        (insert-register ,(car register))))
+        (when (and delete-selection-mode (not buffer-read-only) transient-mark-mode mark-active)
+          (delete-active-region))
+        (insert-register ,(car register) ,browse-register-move-cursor-after-inserted-text)))
     ((string= "N" type)
      `(lambda()
         (browse-register-quit)
-        (kill-new ,(number-to-string (cdr register)))
-        (insert-register ,(car register))))
+        (when (and delete-selection-mode (not buffer-read-only) transient-mark-mode mark-active)
+          (delete-active-region))
+        (insert-register ,(car register) ,browse-register-move-cursor-after-inserted-text)))
     ((string= "R" type)
      `(lambda()
         (browse-register-quit)
-        (kill-new ,(mapconcat 'identity (cdr register) "\n"))
-        (insert-register ,(car register))))
-    ((string-match "[FMW]" type)
+        (when (and delete-selection-mode (not buffer-read-only) transient-mark-mode mark-active)
+          (delete-active-region))
+        (insert-register ,(car register) ,browse-register-move-cursor-after-inserted-text)))
+    ((string-match "[FMWOVA]" type)
      `(lambda()
         (browse-register-quit)
         (jump-to-register ,(car register))))))
@@ -250,11 +264,11 @@ output string to `browse-register-string-width'."
     ((string= "M" type)
       (cond
         ((marker-position value)
-          (format "[Marker at point %d in buffer %s]"
-                    (marker-position value)
-                    (buffer-name (marker-buffer value))))
+          (format "Marker: %s at %d"
+            (buffer-name (marker-buffer value))
+            (marker-position value)))
         ((marker-buffer value)
-          (format "[Marker in buffer %s]"
+          (format "Marker: %s"
                     (buffer-name (marker-buffer value))))
         (t (format "[Marker gone?]"))))
     ((string= "N" type)
@@ -264,12 +278,18 @@ output string to `browse-register-string-width'."
     ((string= "R" type)
       (mapconcat 'identity value "\\ "))
     ((string= "W" type)
-      (format "[Window configuration in frame \"%s\"]"
+      (format "Window config in frame \"%s\""
              (frame-parameter
               (window-configuration-frame (car value)) 'name)))
     ((string= "F" type)
-      (format "[Frame configuration]"))
-    (t "[Error: unknow type]")))
+      (format "Frame config"))
+    ((string= "A" type)
+      (format "Frameset config"))
+    ((string= "O" type)
+      (format "Open file: %s" (cdr value)))
+    ((string= "V" type)
+      (format "Visit file: %s at %d" (car (cdr value)) (car (cdr (cdr value)))))
+    (t "Error: unknow type")))
 
 (defun browse-register-quit ()
   "Take the action specified by `browse-register-quit-action'."
@@ -299,6 +319,9 @@ the register or copy its value into the kill ring."
                (hdl (browse-register-get-handler register typ)))
           ;;(message "111 %s" typ)
           (setq browse-register-last-used-key key)
+          (if (string-match "[SNR]" typ)
+            (when (and delete-selection-mode (not buffer-read-only) transient-mark-mode mark-active)
+              (delete-active-region)))
           (funcall hdl))
 	      (error (message "Unknown error[0]"))))))
 
@@ -374,8 +397,9 @@ Raise an error if not on a register line."
      (lambda (register)
        (let* ((key (char-to-string (car register)))
               (val (browse-register-elide (cdr register)))
-              (typ (browse-register-get-type val))
+              (typ (browse-register-get-type (cdr register)))
               (hdl (browse-register-get-handler register typ)))
+         (message "222 %s %s" typ type)
          (when (string-match typ type)
            (insert
             (format "  %s    %s   %s\n"
@@ -397,11 +421,14 @@ Raise an error if not on a register line."
          (i 0))
     (while (not stop-search)
       (setq register (nth i register-alist))
-      (setq key (char-to-string (car register)))
-      (if (string-match browse-register-last-used-key key)
+      (if register
         (progn
-          (setq stop-search t)
-          (forward-line (+ browse-register-header-lines-length i))))
+          (setq key (char-to-string (car register)))
+          (if (string-match browse-register-last-used-key key)
+            (progn
+              (setq stop-search t)
+              (forward-line (+ browse-register-header-lines-length i)))))
+        (setq stop-search t))
       (setq i (1+ i)))))
 
 (defun browse-register-set-window-height ()
