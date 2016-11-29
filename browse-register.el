@@ -43,9 +43,14 @@
 ;; Many code is from register-list.el, browse-kill-ring.el and bs.el.
 ;; Very thanks to those developers.
 ;;
-;;; Todo:
+;; Todo:
 ;;
-;;; History:
+;; History:
+;;
+;; - [2016-11-29] Released v0.3.2
+;;
+;;   Change default value for `browse-register-move-cursor-after-inserted-text'.
+;;
 ;;
 ;; - [2015-03-05] Released v0.3.1
 ;;
@@ -105,8 +110,8 @@
 
 (defvar browse-register-last-used-key nil)
 
-(defvar browse-register-move-cursor-after-inserted-text nil
-  "If non-nil, puts mark before inserted text and point after.")
+(defvar browse-register-move-cursor-after-inserted-text t
+  "If non-nil, puts point after inserted text.")
 
 (defcustom browse-register-max-window-height 20
   "Maximal window height of Browse Register Buffer."
@@ -455,12 +460,6 @@ Raise an error if not on a register line."
   (interactive "cJump to register: ")
   (browse-register-quit)
   (jump-to-register key))
-
-
-
-
-
-
 
 ;;;###autoload
 (defun browse-register (&optional type fontify)
